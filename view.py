@@ -111,24 +111,40 @@ def cadastro_usuario():
     }), 200
 
 @app.route('/cadastro', methods=['GET'])
-def lista_cadastro():
+def listar_usuarios():
+    try:
         cur = con.cursor()
-        cur.execute("SELECT id_cadastro, nome, email, telefone, senha, categoria, tipo, ativo FROM cadastro")
-        usuarios = cur.fetchall()
-        usuarios_dic = []
 
-        for usuario in usuarios:
-            usuarios_dic.append({
-            'id_cadastro': usuario[0],
-            'nome': usuario[1],
-            'email': usuario[2],
-            'telefone': usuario[3],
-            'senha': usuario[4],
-            'categoria': usuario[5],
-            'tipo': usuario[6]
+        # parâmetro opcional: ?tipo=profissional
+        tipo = request.args.get('tipo')
+
+        if tipo:
+            cur.execute("SELECT ID, NOME, EMAIL, TELEFONE, TIPO, CATEGORIA, ATIVO FROM CADASTRO WHERE TIPO = ?", (tipo,))
+        else:
+            cur.execute("SELECT ID, NOME, EMAIL, TELEFONE, TIPO, CATEGORIA, ATIVO FROM CADASTRO")
+
+        rows = cur.fetchall()
+        cur.close()
+
+        if not rows:
+            return jsonify({"message": "Nenhum usuário encontrado"}), 404
+
+        usuarios = []
+        for row in rows:
+            usuarios.append({
+                "id": row[0],
+                "nome": row[1],
+                "email": row[2],
+                "telefone": row[3],
+                "tipo": row[4],
+                "categoria": row[5],
+                "ativo": bool(row[6])
             })
 
-        return jsonify(mensagem='Lista de usuarios', usuarios=usuarios_dic)
+        return jsonify(usuarios), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/cadastro/<int:id>', methods=['DELETE'])
 def deletar_Usuario(id):
@@ -294,7 +310,7 @@ def cadastrar_servico():
         data = request.get_json()
         descricao = data.get('descricao')
         valor = data.get('valor')
-        duracao_horas = data.get('duracao_horas')  # vem "16:53"
+        duracao_horas = data.get('duracao_horas')
 
         # Verifica se todos os campos obrigatórios foram informados
         if not descricao or not valor or not duracao_horas:
@@ -333,7 +349,6 @@ def cadastrar_servico():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
 @app.route('/servico', methods=['GET'])
 def listar_servicos():
     try:
@@ -346,74 +361,20 @@ def listar_servicos():
 
         lista = []
         for s in servicos:
+            duracao = s[3]
+            if duracao is not None:
+                duracao_horas = duracao.hour + duracao.minute / 60 + duracao.second / 3600
+            else:
+                duracao_horas = None
+
             lista.append({
                 "id_servico": s[0],
                 "descricao": s[1],
-                "valor": float(s[2]),
-                "duracao_horas": float(s[3])
+                "valor": float(s[2]) if s[2] is not None else 0.0,
+                "duracao_horas": duracao_horas
             })
 
         return jsonify(lista), 200
-
-    except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
-@app.route('/agenda', methods=['POST'])
-def cadastrar_agendamento():
-    try:
-        data = request.get_json()
-
-        id_profissional = data.get('id_profissional')
-        id_servico = data.get('id_servico')
-        data_hora_str = data.get('data_hora')  # Ex.: "2025-10-07 14:30:00"
-
-        if not id_profissional or not id_servico or not data_hora_str:
-            return jsonify({"error": "Todos os campos são obrigatórios"}), 400
-
-        from datetime import datetime, timedelta
-
-        data_hora = datetime.strptime(data_hora_str, "%Y-%m-%d %H:%M:%S")
-
-        cur = con.cursor()
-
-        cur.execute("SELECT DURACAO_HORAS FROM SERVICO WHERE ID_SERVICO = ?", (id_servico,))
-        result = cur.fetchone()
-        if not result:
-            cur.close()
-            return jsonify({"error": "Serviço não encontrado"}), 400
-
-        duracao = float(result[0])  # duração em horas
-        fim_novo_agendamento = data_hora + timedelta(hours=duracao)
-
-        cur.execute("""
-            SELECT A.DATA_HORA, S.DURACAO_HORAS
-            FROM AGENDA A
-            JOIN SERVICO S ON A.ID_SERVICO = S.ID_SERVICO
-            WHERE A.ID_PROFISSIONAL = ?
-        """, (id_profissional,))
-
-        agendamentos = cur.fetchall()
-
-        # Verifica conflitos
-        for ag in agendamentos:
-            inicio_existente = ag[0]
-            duracao_existente = float(ag[1])
-            fim_existente = inicio_existente + timedelta(hours=duracao_existente)
-
-            # Se houver qualquer sobreposição
-            if (data_hora < fim_existente) and (fim_novo_agendamento > inicio_existente):
-                cur.close()
-                return jsonify({"error": "O horário conflita com outro agendamento do profissional"}), 400
-
-        # Insere o agendamento
-        cur.execute("""
-            INSERT INTO AGENDA (ID_PROFISSIONAL, ID_SERVICO, DATA_HORA)
-            VALUES (?, ?, ?)
-        """, (id_profissional, id_servico, data_hora))
-        con.commit()
-        cur.close()
-
-        return jsonify({"message": "Agendamento cadastrado com sucesso!"}), 201
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -451,5 +412,118 @@ def editar_servico(id_servico):
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/agenda', methods=['POST'])
+def cadastrar_agendamento():
+    try:
+        data = request.get_json()
+
+        id_profissional = data.get('id_profissional')
+        id_servico = data.get('id_servico')
+        data_hora_str = data.get('data_hora')  # Ex.: "2025-10-07 14:30:00"
+
+        if not id_profissional or not id_servico or not data_hora_str:
+            return jsonify({"error": "Todos os campos são obrigatórios"}), 400
+
+        from datetime import datetime, timedelta
+
+        data_hora = datetime.strptime(data_hora_str, "%Y-%m-%d %H:%M:%S")
+
+        cur = con.cursor()
+
+        # Busca duração do serviço
+        cur.execute("SELECT DURACAO_HORAS FROM SERVICO WHERE ID_SERVICO = ?", (id_servico,))
+        result = cur.fetchone()
+
+        # Verifica se o serviço existe e se tem duração válida
+        if not result:
+            cur.close()
+            return jsonify({"error": "Serviço não encontrado"}), 400
+        if result[0] is None:
+            cur.close()
+            return jsonify({"error": "Serviço sem duração cadastrada"}), 400
+
+        duracao = float(result[0])  # duração em horas
+        fim_novo_agendamento = data_hora + timedelta(hours=duracao)
+
+        # Busca agendamentos do mesmo profissional
+        cur.execute("""
+            SELECT A.DATA_HORA, S.DURACAO_HORAS
+            FROM AGENDA A
+            JOIN SERVICO S ON A.ID_SERVICO = S.ID_SERVICO
+            WHERE A.ID_PROFISSIONAL = ?
+        """, (id_profissional,))
+
+        agendamentos = cur.fetchall()
+
+        # Verifica conflitos
+        for ag in agendamentos:
+            inicio_existente = ag[0]
+            duracao_existente = ag[1]
+
+            # Se algum agendamento tiver duração nula, ignora esse registro
+            if duracao_existente is None:
+                continue
+
+            duracao_existente = float(duracao_existente)
+            fim_existente = inicio_existente + timedelta(hours=duracao_existente)
+
+            # Se houver qualquer sobreposição
+            if (data_hora < fim_existente) and (fim_novo_agendamento > inicio_existente):
+                cur.close()
+                return jsonify({"error": "O horário conflita com outro agendamento do profissional"}), 400
+
+        # Insere o novo agendamento
+        cur.execute("""
+            INSERT INTO AGENDA (ID_PROFISSIONAL, ID_SERVICO, DATA_HORA)
+            VALUES (?, ?, ?)
+        """, (id_profissional, id_servico, data_hora))
+        con.commit()
+        cur.close()
+
+        return jsonify({"message": "Agendamento cadastrado com sucesso!"}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/agenda', methods=['GET'])
+def listar_agendamentos():
+    try:
+        cur = con.cursor()
+
+        cur.execute("""
+            SELECT 
+                A.ID_AGENDA,
+                A.ID_PROFISSIONAL,
+                S.DESCRICAO AS SERVICO,
+                A.DATA_HORA,
+                S.DURACAO_HORAS
+            FROM AGENDA A
+            JOIN SERVICO S ON A.ID_SERVICO = S.ID_SERVICO
+            ORDER BY A.DATA_HORA
+        """)
+
+        agendamentos = cur.fetchall()
+        cur.close()
+
+        if not agendamentos:
+            return jsonify({"message": "Nenhum agendamento encontrado"}), 200
+
+        # Formata o resultado em lista de dicionários
+        agendamentos_formatados = []
+        for ag in agendamentos:
+            agendamentos_formatados.append({
+                "id_agenda": ag[0],
+                "id_profissional": ag[1],
+                "servico": ag[2],
+                "data_hora": ag[3].strftime("%Y-%m-%d %H:%M:%S") if ag[3] else None,
+                "duracao_horas": float(ag[4]) if ag[4] is not None else None
+            })
+
+        return jsonify(agendamentos_formatados), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 
