@@ -318,31 +318,24 @@ def cadastrar_servico():
         valor = data.get('valor')
         duracao_horas = data.get('duracao_horas')
 
-        # Verifica se todos os campos obrigatórios foram informados
         if not descricao or not valor or not duracao_horas:
             return jsonify({"error": "Todos os campos são obrigatórios"}), 400
 
-        # Verifica se o formato de duracao_horas é válido
         try:
-            # Valida o formato "HH:MM" para a duração
             horas, minutos = map(int, duracao_horas.split(":"))
             if horas < 0 or minutos < 0 or minutos >= 60:
                 raise ValueError("Formato inválido de duração (deve ser HH:MM).")
         except ValueError as e:
             return jsonify({"error": f"Erro no formato de DURACAO_HORAS: {str(e)}"}), 400
 
-        # Conecta ao banco de dados
         cur = con.cursor()
 
-        # Verifica se o serviço já existe
         cur.execute("SELECT COUNT(*) FROM SERVICO WHERE DESCRICAO = ?", (descricao,))
         if cur.fetchone()[0] > 0:
             return jsonify({"error": "Este serviço já está cadastrado"}), 400
 
-        # Converte para o formato "HH:MM:SS" (garante que é uma string para TIME)
         duracao_horas = f"{horas:02}:{minutos:02}:00"
 
-        # Insere o novo serviço
         cur.execute("""
             INSERT INTO SERVICO (DESCRICAO, VALOR, DURACAO_HORAS)
             VALUES (?, ?, ?)

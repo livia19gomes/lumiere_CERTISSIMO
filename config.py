@@ -3,7 +3,7 @@ SECRET_KEY = 'chave_secreta'
 UPLOAD_FILMES = os.path.join(os.getcwd(), 'static/uploads')
 DEBUG = True
 DB_HOST = 'localhost'
-DB_NAME = r'C:\Users\Aluno\Downloads\LUMIERE.FDB'
+DB_NAME = r'C:\Users\Aluno\Desktop\Isadora\lumiere_nesse\BANCO.FDB'
 
 
 DB_USER = 'sysdba'
