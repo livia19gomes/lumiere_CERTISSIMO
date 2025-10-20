@@ -115,13 +115,20 @@ def listar_usuarios():
     try:
         cur = con.cursor()
 
-        # parâmetro opcional: ?tipo=profissional
+        # Parâmetro opcional: ?tipo=profissional
         tipo = request.args.get('tipo')
 
         if tipo:
-            cur.execute("SELECT ID, NOME, EMAIL, TELEFONE, TIPO, CATEGORIA, ATIVO FROM CADASTRO WHERE TIPO = ?", (tipo,))
+            cur.execute("""
+                SELECT id_cadastro, nome, email, telefone, tipo, categoria, ativo 
+                FROM CADASTRO 
+                WHERE tipo = ?
+            """, (tipo,))
         else:
-            cur.execute("SELECT ID, NOME, EMAIL, TELEFONE, TIPO, CATEGORIA, ATIVO FROM CADASTRO")
+            cur.execute("""
+                SELECT id_cadastro, nome, email, telefone, tipo, categoria, ativo 
+                FROM CADASTRO
+            """)
 
         rows = cur.fetchall()
         cur.close()
