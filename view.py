@@ -2,7 +2,6 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from werkzeug.security import generate_password_hash, check_password_hash
 import re
-from datetime import datetime, timedelta
 from main import app, con
 import jwt
 
