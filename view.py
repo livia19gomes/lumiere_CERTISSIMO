@@ -114,7 +114,6 @@ def listar_usuarios():
     try:
         cur = con.cursor()
 
-        # Parâmetro opcional: ?tipo=profissional
         tipo = request.args.get('tipo')
 
         if tipo:
@@ -523,6 +522,3 @@ def listar_agendamentos():
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
-
-
-
